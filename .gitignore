@@ -1,4 +1,4 @@
 .stack-work/
-brikor.cabal
+*.cabal
 *~
 .*neomake*

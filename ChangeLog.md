@@ -1,3 +1,3 @@
-# Changelog for brikor
+# Changelog for bkpp
 
 ## Unreleased changes
