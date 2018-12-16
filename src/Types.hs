@@ -11,7 +11,8 @@ type Name = ()
 
 -- State container 
 data KState = KState
-  { _window     :: String
+  { _kinstance  :: KodiInstance
+  , _window     :: String
   , _player     :: Player
   , _title      :: String
   , _nowPlaying :: Maybe NowPlaying
@@ -52,6 +53,11 @@ instance Show Volume where
   show (Volume p m) = if m then "--" else if p < 100 then " " ++ padInt p else padInt p
 
 clearPlayer (Player _ _ _ _ e) = Player 0 0 mempty mempty e
+
+data Times = Times
+  { _elapsed :: Time
+  , _remaining :: Time
+  } deriving (Eq, Ord)
 
 data Time = Time
   { _hours         :: Hours

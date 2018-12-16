@@ -32,6 +32,8 @@ dependencies:
 - microlens-platform
 - unordered-containers
 - scientific
+- transformers
+- vector
 
 library:
   source-dirs: src
