@@ -1,63 +1,86 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Types where
 
+import           Debug.Trace
 import           Lens.Micro.Platform
 import           Data.Aeson
-import           KodiRPC.Types
+import           Data.Maybe
+import           KodiRPC.Types.Base
+import           GHC.Generics
 
 type Name = ()
 
+type Kall = Method -> IO (Either RpcException Value)
+
+-- type KAction = Action -> IO (Either RpcException Value)
 -- State container 
+
 data KState = KState
-  { _kinstance  :: KodiInstance
+  { _k          :: KodiInstance
   , _window     :: String
-  , _player     :: Player
-  , _title      :: String
-  , _nowPlaying :: Maybe NowPlaying
-  , _lastRecvd  :: Value
+  , _player     :: Maybe Player
+  , _volume     :: Volume
   }
   deriving (Show)
 
 data PlayerState = Playing | Paused
   deriving (Show, Read)
 
-data NowPlaying =
-  Song
-  { _songTitle   :: String
-  , _artist      :: [String]
-  , _album       :: Maybe String
-  , _albumArtist :: Maybe String
+data Media =
+  Media
+    { _title    :: String
+    , _file     :: String
+    , _details  :: MediaDetails
+    , _duration :: Int
+    } deriving (Show)
+
+data MediaDetails =
+  Audio
+  { _album         :: String
+  , _artist        :: [String]
+  , _albumArtist   :: [String]
+  , _displayArtist :: String
   }
-  | Video
-  { _videoTitle  :: String
+  |
+  Movie
+  |
+  Episode
+  { _episode       :: Int
+  , _showtitle     :: String
+  , _season        :: Int
   }
   deriving (Show)
 
 data Player = Player
   { _speed         :: Float
-  , _playerId      :: Float
+  , _playerId      :: Int
   , _timeElapsed   :: Time
   , _timeRemaining :: Time
-  , _volume        :: Volume
+  , _media         :: Media
   }
   deriving (Show)
 
 data Volume = Volume
   { _volPercent :: Int
-    , _muted :: Bool
+  , _muted :: Bool
   }
 
 instance Show Volume where
-  show (Volume p m) = if m then "--" else if p < 100 then " " ++ padInt p else padInt p
+  show (Volume p m)
+    | m = "--"
+    | p < 100 = " " ++ padInt p
+    | otherwise = padInt p
+
+instance FromJSON Volume where
+  parseJSON = withObject "Volume " $ \o -> Volume
+    <$> o.:"volume"
+    <*> o.:"muted"
 
 clearPlayer (Player _ _ _ _ e) = Player 0 0 mempty mempty e
-
-data Times = Times
-  { _elapsed :: Time
-  , _remaining :: Time
-  } deriving (Eq, Ord)
+tdb_ x = trace (show x) x
 
 data Time = Time
   { _hours         :: Hours
@@ -66,6 +89,13 @@ data Time = Time
   , _milliseconds  :: Milliseconds
   }
   deriving (Eq, Ord)
+
+instance FromJSON Time where
+  parseJSON = withObject "Time" $ \o -> Time
+    <$> o.:"hours"
+    <*> o.:"minutes"
+    <*> o.:"seconds"
+    <*> o.:"milliseconds"
 
 instance Monoid Time where
   mempty = Time 0 0 0 0
@@ -76,6 +106,24 @@ padInt x = if x < 10 then "0" ++ show x else show x
 instance Show Time where
   show (Time 0 a b _) = padInt a ++ ":" ++ padInt b
   show (Time a b c _) = padInt a ++ ":" ++ padInt b ++ ":" ++ padInt c
+
+data TimeProgress = TimeProgress
+  { _elapsed :: Time
+  , _total   :: Time
+  } deriving (Eq, Ord, Show)
+
+instance Monoid TimeProgress where
+  mempty = TimeProgress mempty mempty
+  mappend mempty b = b
+  mappend b mempty = b
+  mappend (TimeProgress a b) (TimeProgress c d)
+    | b == d = TimeProgress c d
+    | otherwise = TimeProgress c d
+
+instance FromJSON TimeProgress where
+  parseJSON = withObject "TimeProgress" $ \o -> TimeProgress
+    <$> o.:"time"
+    <*> o.:"totaltime"
 
 type Hours        = Int
 type Minutes      = Int
@@ -95,14 +143,13 @@ addSec (Time h n s m) = Time h' n'' s'' m
         s'' = if s' > 59 then 0 else s'
         n'' = if n' > 59 then 0 else n'
 
-
-
-makeLenses ''NowPlaying
+makeLenses ''Media
+makeLenses ''MediaDetails
 makeLenses ''Player
 makeLenses ''KState
 
 type UI = KState
 
-isPlaying k = k^.player^.speed > 0
+isPlaying k = maybe False (\p -> p^.speed > 0) (k^.player)
+isPlayingStr k = maybe "stopped" (\p -> if (p^.speed) > 0 then "playing" else "paused") $ k^.player
 
-isPlayingStr plyr = if isPlaying plyr then "playing" else "paused"
