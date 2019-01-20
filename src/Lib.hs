@@ -9,6 +9,7 @@ import qualified KodiRPC.Methods.Input as I
 import qualified KodiRPC.Methods.Player as P
 import qualified KodiRPC.Methods.Player as Player
 import qualified KodiRPC.Methods.Application as Application
+import qualified KodiRPC.Types.Fields.All as FA
 import           KodiRPC.Calls
 import           KodiRPC.Types.Base
 import           KodiRPC.Util hiding (tdb)
@@ -85,8 +86,8 @@ handleEvent ui (VtyEvent x)           = handleVtyEvent ui x
 handleEvent ui _                      = continue ui
 
 handleTick :: KState -> KState
-handleTick ui = if not . isPlaying $ ui then ui else updatePlayer ui
-  where updatePlayer x = x & player %~ fmap (over timeElapsed addSec)
+handleTick ui = if not . isPlaying $ ui then ui else incTime ui
+  where incTime x = x & player %~ fmap (over timeElapsed addSec)
 
 handleNotif :: UI -> Maybe Notif -> EventM Name (Next UI)
 handleNotif ui (Just notif) = notifMethodHandler m p ui
@@ -100,18 +101,13 @@ updateSpeed    p ks = ks & player %~ fmap (speed .~ extractSpeed p)
 updatePlayerId p ks = ks & player %~ fmap (playerId .~ extractPlayerId p)
 updateTime     p ks = ks & player %~ fmap (timeElapsed .~ extractTime p)
 updateVolume   p ks = ks & volume .~ extractVolume p
-updateTitle    p ks = ks & title .~ T.unpack (extractTitle p)
+updateTitle    p ks = ks & title  .~ T.unpack (extractTitle p)
 
 notifMethodHandler :: String -> Object -> UI -> EventM Name (Next UI)
 notifMethodHandler "Player.OnPause" p k = continue $ updater [updatePlayerId, updateSpeed] p k
-
 notifMethodHandler "Player.OnStop" _ k = continue $ k & player .~ Nothing
-
--- also get times
-notifMethodHandler "Player.OnPlay" p k = suspendAndResume $ updatePlayer $ updater [updateSpeed, updatePlayerId] p k
-  -- also update nowplaying to song/video
-  --
-notifMethodHandler "Player.OnSeek" p k = continue $ updater [updatePlayerId, updateSpeed, updateTime] p k
+notifMethodHandler "Player.OnPlay" p k = suspendAndResume $ updatePlayerProps $ (updateSpeed p . updatePlayerId p) k
+notifMethodHandler "Player.OnSeek" p k = continue $ (updatePlayerId p . updateSpeed p . updateTime p) k
 notifMethodHandler "Application.OnVolumeChanged" p k = continue $ updateVolume (Object p) k
 
 --   -- may have to use suspendandresume here for updating state from IO
@@ -120,9 +116,17 @@ notifMethodHandler "Application.OnVolumeChanged" p k = continue $ updateVolume (
 -- notifMethodHandler params "Player.OnResume" ks = continue $ ks & player .~ ((ks^.player) & speed .~ 1.0)
 notifMethodHandler _ _ ks                 = continue ks
 
-updatePlayer k = do
-  props <- kall' $ P.getProperties (1 :: Float) [P.Time, P.Totaltime]
-  return k
+updatePlayerProps :: KState -> IO KState
+updatePlayerProps ki = fromMaybe ki <$> withMaybe
+    where withMaybe = runMaybeT $ do
+                      plyr <- MaybeT $ pure (ki^.player) :: MaybeT IO Player
+                      let pid = _playerId plyr
+                      maybeProps <- MaybeT $ eitherToMaybe <$> kall (ki^.k) (P.getProperties pid [P.Time, P.Totaltime, P.Speed])
+                      speed' <- MaybeT . pure $ parseMaybe (withObject "Speed" (.:"speed")) maybeProps :: MaybeT IO Float
+                      elapse <- MaybeT . pure $ parseMaybe (withObject "TimeE" $ (.:"time") >=> parseJSON) maybeProps :: MaybeT IO Time
+                      remain <- MaybeT . pure $ parseMaybe (withObject "TimeR" $ (.:"totaltime") >=> parseJSON) maybeProps :: MaybeT IO Time
+                      let plyr' = (speed .~ speed') . (timeElapsed .~ elapse) . (timeRemaining .~ remain)
+                      return $ ki & player %~ fmap plyr'
 
 extractPlayerId :: Object -> Int
 extractPlayerId p = maybe 0 (ceiling . toRealFloat) $ flip parseMaybe p $ (.:"player") >=> (.:"playerid")
@@ -136,17 +140,17 @@ extractVolume   p = fromMaybe def $ parseMaybe parseJSON p
 extractTime :: Object -> Time
 extractTime p = fromMaybe mempty $ flip parseMaybe p $ (.:"player") >=> (.:"time") >=> parseJSON
 
-handleVtyEvent :: s -> Event -> EventM n (Next s)
+handleVtyEvent :: KState -> Event -> EventM n (Next KState)
 handleVtyEvent ui (V.EvKey (V.KChar c) []) = handleChar ui c
 handleVtyEvent ui (V.EvKey k [])           = handleKey ui k
 handleVtyEvent ui _                        = continue ui
 
-handleKey :: s -> Key -> EventM n (Next s)
+handleKey :: KState -> Key -> EventM n (Next KState)
 handleKey ui V.KEnter = kallState ui I.select
 handleKey ui V.KBS    = kallState ui I.back
 handleKey ui _        = continue ui
 
-handleChar :: s -> Char -> EventM n (Next s)
+handleChar :: KState -> Char -> EventM n (Next KState)
 -- movement
 handleChar ui 'h'  = sAct ui I.Left
 handleChar ui 'j'  = sAct ui I.Down
@@ -168,8 +172,9 @@ sAct state action = suspendAndResume $ do
   result <- forkIO . void $ smartAction test action
   return state
 
+kallState :: UI -> Method -> EventM n (Next UI)
 kallState state action = suspendAndResume $ do
-  _ <- forkIO . void $ kall' action
+  _ <- forkIO . void $ kall (state^.k) action
   return state
 
 -- populate all the basic kstate data
@@ -213,8 +218,8 @@ getPlayerId ki = do
 getTimes :: KodiInstance -> IO (Maybe TimeProgress)
 getTimes ki = do
   pid <- eitherToMaybe <$> getPlayerId ki
-  blah <- maybe (pure Nothing) getProps pid
-  return $ parseMaybe parseJSON =<< blah
+  props <- maybe (pure Nothing) getProps pid
+  return $ parseMaybe parseJSON =<< props
     where getProps p = eitherToMaybe <$> kall ki (Player.getProperties p [Player.Time, Player.Totaltime])
 
 getPlayer' ki = runMaybeT $ do
