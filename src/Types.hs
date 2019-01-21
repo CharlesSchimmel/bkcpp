@@ -148,8 +148,6 @@ makeLenses ''MediaDetails
 makeLenses ''Player
 makeLenses ''KState
 
-type UI = KState
-
-isPlaying k = maybe False (\p -> p^.speed > 0) (k^.player)
-isPlayingStr k = maybe "stopped" (\p -> if (p^.speed) > 0 then "playing" else "paused") $ k^.player
+test :: KodiInstance
+test = KodiInstance "localhost" 8080 "" ""
 
