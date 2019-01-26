@@ -4,19 +4,15 @@
 
 module Types where
 
-import           Debug.Trace
-import           Lens.Micro.Platform
+import           KodiRPC.Types.Base
+
 import           Data.Aeson
 import           Data.Maybe
-import           KodiRPC.Types.Base
+import           Debug.Trace
 import           GHC.Generics
+import           Lens.Micro.Platform
 
 type Name = ()
-
-type Kall = Method -> IO (Either RpcException Value)
-
--- type KAction = Action -> IO (Either RpcException Value)
--- State container 
 
 data KState = KState
   { _k          :: KodiInstance
@@ -150,4 +146,3 @@ makeLenses ''KState
 
 test :: KodiInstance
 test = KodiInstance "localhost" 8080 "" ""
-

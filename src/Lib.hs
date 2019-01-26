@@ -45,31 +45,29 @@ updateTitle    p ks = ks & title  .~ T.unpack (extractTitle p)
 updatePlayerProps :: KState -> IO KState
 updatePlayerProps ki = fromMaybe ki <$> withMaybe
     where withMaybe = runMaybeT $ do
-                      plyr <- MaybeT $ pure (ki^.player) :: MaybeT IO Player
-                      let pid = _playerId plyr
+                      pid        <- MaybeT . pure $ _playerId <$>(ki^.player) :: MaybeT IO Int
                       maybeProps <- MaybeT $ eitherToMaybe <$> kall (ki^.k) (Player.getProperties pid [Player.Time, Player.Totaltime, Player.Speed])
-                      speed' <- MaybeT . pure $ parseMaybe (withObject "Speed" (.:"speed")) maybeProps :: MaybeT IO Float
-                      elapse <- MaybeT . pure $ parseMaybe (withObject "TimeE" $ (.:"time") >=> parseJSON) maybeProps :: MaybeT IO Time
-                      remain <- MaybeT . pure $ parseMaybe (withObject "TimeR" $ (.:"totaltime") >=> parseJSON) maybeProps :: MaybeT IO Time
+                      let parseProps p = MaybeT . pure $ parseMaybe p maybeProps
+                      speed'     <- parseProps (withObject "Speed" (.:"speed"))                   :: MaybeT IO Float
+                      elapse     <- parseProps (withObject "TimeE" (.:"time") >=> parseJSON)      :: MaybeT IO Time
+                      remain     <- parseProps (withObject "TimeR" (.:"totaltime") >=> parseJSON) :: MaybeT IO Time
                       let plyr' = (speed .~ speed') . (timeElapsed .~ elapse) . (timeRemaining .~ remain)
                       return $ ki & player %~ fmap plyr'
 
 extractPlayerId :: Object -> Int
 extractPlayerId p = maybe 0 (ceiling . toRealFloat) $ flip parseMaybe p $ (.:"player") >=> (.:"playerid")
 extractSpeed    :: Object -> Float
-extractSpeed    p = maybe 0.0 toRealFloat $ flip parseMaybe p $ (.:"player") >=> (.:"speed")
+extractSpeed    p = maybe 0.0 toRealFloat           $ flip parseMaybe p $ (.:"player") >=> (.:"speed")
 extractTitle    :: Object -> Text
-extractTitle    p = fromMaybe "n/a" $ flip parseMaybe p $ (.:"item") >=> (.:"title")
+extractTitle    p = fromMaybe "n/a"                 $ flip parseMaybe p $ (.:"item")   >=> (.:"title")
+extractTime     :: Object -> Time
+extractTime p     = fromMaybe mempty                $ flip parseMaybe p $ (.:"player") >=> (.:"time") >=> parseJSON
 extractVolume   :: Value -> Volume
-extractVolume   p = fromMaybe def $ parseMaybe parseJSON p
-  where def = Volume 0 False
-extractTime :: Object -> Time
-extractTime p = fromMaybe mempty $ flip parseMaybe p $ (.:"player") >=> (.:"time") >=> parseJSON
+extractVolume   p = fromMaybe default'              $ parseMaybe parseJSON p
+  where default'  = Volume 0 False
 
 sAct :: KState -> Input.Action -> EventM n (Next KState)
-sAct state action = suspendAndResume $ do
-  result <- forkIO . void $ smartAction test action
-  return state
+sAct state action = suspendAndResume (smartAction (state^.k) action >> pure state)
 
 kallState :: KState -> Method -> EventM n (Next KState)
 kallState state action = suspendAndResume $ do
@@ -80,10 +78,21 @@ kallState state action = suspendAndResume $ do
 initKState :: KodiInstance -> IO KState
 initKState ki = do
   times <- fromMaybe mempty <$> getTimes ki
-  p <- getPlayer ki
-  vol <- getVolume ki
+  p     <- getPlayer ki
+  vol   <- getVolume ki
   return $ KState ki "window" p vol
 
+-- getItem :: KodiInstance -> IO (Maybe MediaDetails)
+getItem k = runMaybeT $ do
+  player <- liftIO $ getPlayer k
+  return player
+
+getVolume' :: Kaller -> MaybeT IO Volume
+getVolume' kaller = MaybeT $ do
+  volR <- kaller $ Application.getProperties [Application.Volume, Application.Muted]
+  return $ eitherToMaybe volR >>= (parseMaybe parseJSON)
+
+-- Redef these as MaybeT IO ___
 getVolume :: KodiInstance -> IO Volume
 getVolume ki = do
   vol <-  kall ki $ Application.getProperties [Application.Volume, Application.Muted]
