@@ -11,7 +11,7 @@ import           Brick.AttrMap
 import           Brick.BChan
 import           Brick.Types           as BT
 import qualified Brick.Widgets.Center  as C
-import           Graphics.Vty          as V
+import qualified Graphics.Vty          as V
 import           Lens.Micro.Platform   ((%~), (&), (^.), (.~), set, over)
 
 
@@ -39,8 +39,8 @@ drawUI ui = [ topLine ui
 someText = attrName "someText"
 attrTitle    = attrName "title"
 
-theMap = attrMap V.defAttr [ (someText, fg cyan)
-                           , (attrTitle, fg white)
+theMap = attrMap V.defAttr [ (someText, fg V.cyan)
+                           , (attrTitle, fg V.white)
                            ]
 
 isPlayingStr :: KState -> String

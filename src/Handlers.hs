@@ -14,8 +14,10 @@ import           KodiRPC.Types.Base
 import           KodiRPC.Util
 
 import           Brick
+import           Brick.Types (Next)
 import           Brick.AttrMap
 import           Brick.BChan
+import           Control.Monad.IO.Class
 import           Prelude as P
 import           Data.Aeson
 import           Graphics.Vty          as V
@@ -41,10 +43,11 @@ handleNotif ui (Just notif) = notifMethodHandler (notif^.notifMethod) (notif^.no
 handleNotif ui _        = continue ui
 
 notifMethodHandler :: String -> Object -> KState -> EventM Name (Next KState)
-notifMethodHandler "Player.OnPause" p k              = continue         $ (updatePlayerId p . updateSpeed p) k
-notifMethodHandler "Player.OnStop" _ k               = continue         $ k & player .~ Nothing
-notifMethodHandler "Player.OnPlay" p k               = suspendAndResume $ updatePlayerProps $ (updateSpeed p . updatePlayerId p) k
-notifMethodHandler "Player.OnSeek" p k               = continue         $ (updatePlayerId p . updateSpeed p . updateTime p) k
+notifMethodHandler "Player.OnPause"   p k            = continue         $ (updatePlayerId p . updateSpeed p) k
+notifMethodHandler "Player.OnStop"    _ k            = continue         $ k & player .~ Nothing
+notifMethodHandler "Player.OnPlay"    p k            = (liftIO . updatePlayerProps $ (updateSpeed (tdb p) . updatePlayerId p) k) >>= continue
+notifMethodHandler "PlayList.OnClear" p k            = notifMethodHandler "Player.OnPlay" p k
+notifMethodHandler "Player.OnSeek"    p k            = continue         $ (updatePlayerId p . updateSpeed p . updateTime p) k
 notifMethodHandler "Application.OnVolumeChanged" p k = continue         $ updateVolume (Object p) k
 -- notifMethodHandler params "Player.OnResume" ks = continue $ ks & player .~ ((ks^.player) & speed .~ 1.0)
 notifMethodHandler _ _ ks                 = continue ks
@@ -61,10 +64,10 @@ handleKey ui _        = continue ui
 
 handleChar :: KState -> Char -> EventM n (Next KState)
 -- movement
-handleChar ui 'h'  = sAct ui I.Left
-handleChar ui 'j'  = sAct ui I.Down
-handleChar ui 'k'  = sAct ui I.Up
-handleChar ui 'l'  = sAct ui I.Right
+handleChar ui 'h'  = sact ui I.Left  >> continue ui
+handleChar ui 'j'  = sact ui I.Down  >> continue ui
+handleChar ui 'k'  = sact ui I.Up    >> continue ui
+handleChar ui 'l'  = sact ui I.Right >> continue ui
 
 -- window ctl
 handleChar ui '\t' = kallState ui $ I.executeAction I.Fullscreen
@@ -72,6 +75,7 @@ handleChar ui '\t' = kallState ui $ I.executeAction I.Fullscreen
 -- media ctl
 handleChar ui ' '  = kallState ui $ I.executeAction I.Playpause
 handleChar ui 'x'  = kallState ui $ I.executeAction I.Stop
+handleChar ui 'i'  = kallState ui $ I.executeAction I.Info
 
 -- else
 handleChar ui 'q'  = halt ui

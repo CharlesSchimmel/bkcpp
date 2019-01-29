@@ -4,6 +4,7 @@ import Lib
 import UI
 import Handlers
 import Types
+import Options
 import KodiRPC.Types.Base
 import KodiRPC.Calls
 
@@ -12,13 +13,19 @@ import           Brick.AttrMap
 import           Brick.BChan
 import           Brick.Types           as BT
 import           Prelude as P
-import           Graphics.Vty          as V
+import qualified Graphics.Vty          as V
 import           Control.Concurrent
 import           Control.Monad
+import           Options.Applicative
+import           Data.Semigroup ((<>))
 
 
 main :: IO ()
-main = ping test >>= maybe notGood allGood
+main = conf >>= main'
+  where conf = execParser $ info (argParse <**> helper) ( fullDesc <> progDesc "Test" <> header "Blah")
+
+main' :: Config -> IO ()
+main' conf = ping (kInstance conf) >>= maybe notGood allGood
 
 allGood :: KodiInstance -> IO ()
 allGood ki = do
@@ -36,3 +43,6 @@ notGood = void $ putStrLn couldNotConnect
 
 justListenToNotifs :: IO ()
 justListenToNotifs = forever $ print =<< notification test
+
+justListenToNotifs' :: KodiInstance -> IO ()
+justListenToNotifs' ki = forever $ print =<< notification ki

@@ -11,8 +11,12 @@ import           Data.Maybe
 import           Debug.Trace
 import           GHC.Generics
 import           Lens.Micro.Platform
+import           Control.Monad.Trans.Reader
 
 type Name = ()
+type KApp = ReaderT KState IO
+
+type Kaller = Method -> IO (Either RpcException Value)
 
 data KState = KState
   { _k          :: KodiInstance
@@ -130,6 +134,10 @@ data Tick = Tick
   deriving ( Show )
 
 type BChanEvent = Either Tick (Maybe Notif)
+
+data Config = Config
+  { kInstance :: KodiInstance
+  } deriving (Show)
 
 addSec :: Time -> Time
 addSec (Time h n s m) = Time h' n'' s'' m

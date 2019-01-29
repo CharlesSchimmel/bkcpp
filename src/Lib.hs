@@ -66,18 +66,15 @@ extractVolume   :: Value -> Volume
 extractVolume   p = fromMaybe default'              $ parseMaybe parseJSON p
   where default'  = Volume 0 False
 
-sAct :: KState -> Input.Action -> EventM n (Next KState)
-sAct state action = suspendAndResume (smartAction (state^.k) action >> pure state)
+sact :: MonadIO m => KState -> Input.Action -> m ()
+sact state action = liftIO . void . forkIO . void $ smartAction (state^.k) action
 
 kallState :: KState -> Method -> EventM n (Next KState)
-kallState state action = suspendAndResume $ do
-  _ <- forkIO . void $ kall (state^.k) action
-  return state
+kallState state action = (liftIO . forkIO . void $ kall (state^.k) action) >> continue state
 
 -- populate all the basic kstate data
 initKState :: KodiInstance -> IO KState
 initKState ki = do
-  times <- fromMaybe mempty <$> getTimes ki
   p     <- getPlayer ki
   vol   <- getVolume ki
   return $ KState ki "window" p vol
@@ -92,7 +89,6 @@ getVolume' kaller = MaybeT $ do
   volR <- kaller $ Application.getProperties [Application.Volume, Application.Muted]
   return $ eitherToMaybe volR >>= (parseMaybe parseJSON)
 
--- Redef these as MaybeT IO ___
 getVolume :: KodiInstance -> IO Volume
 getVolume ki = do
   vol <-  kall ki $ Application.getProperties [Application.Volume, Application.Muted]
