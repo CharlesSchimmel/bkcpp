@@ -9,7 +9,17 @@ import Options.Applicative
 import Data.Semigroup ((<>))
 
 -- argParse :: Parser Config
-argParse = Config <$> (KodiInstance
+argParse = Options <$> configParse
+  <*> option auto
+   ( long "youtube"
+   <> short 'y'
+   <> metavar "yt"
+   <> help "YouTube url to cast"
+   )
+
+configParse = Config <$> kodiInstanceParse
+
+kodiInstanceParse = KodiInstance
   <$> strOption
     (  long "ip-address"
     <> short 'a'
@@ -36,4 +46,3 @@ argParse = Config <$> (KodiInstance
     <> metavar "pass"
     <> help "Password (not usually set)"
     )
-                      )

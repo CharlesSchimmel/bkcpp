@@ -33,8 +33,8 @@ data Media =
   Media
     { _title    :: String
     , _file     :: String
-    , _details  :: MediaDetails
     , _duration :: Int
+    , _details  :: MediaDetails
     } deriving (Show)
 
 data MediaDetails =
@@ -137,6 +137,11 @@ type BChanEvent = Either Tick (Maybe Notif)
 
 data Config = Config
   { kInstance :: KodiInstance
+  } deriving (Show)
+
+data Options = Options
+  { config :: Config
+  , youTube :: Maybe String
   } deriving (Show)
 
 addSec :: Time -> Time

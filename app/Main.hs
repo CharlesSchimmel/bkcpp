@@ -18,14 +18,25 @@ import           Control.Concurrent
 import           Control.Monad
 import           Options.Applicative
 import           Data.Semigroup ((<>))
+import           Data.Maybe
+import           Data.Foldable
+import           Data.Text as T
 
 
 main :: IO ()
 main = conf >>= main'
   where conf = execParser $ info (argParse <**> helper) ( fullDesc <> progDesc "Test" <> header "Blah")
 
-main' :: Config -> IO ()
-main' conf = ping (kInstance conf) >>= maybe notGood allGood
+main' :: Options -> IO ()
+main' opts = ping (kInstance . config $ opts) >>= maybe notGood (const . switchboard $ opts)
+
+switchboard :: Options -> IO ()
+switchboard opts = do
+    let tyt yt = throwYoutube (kInstance . config $ opts) (T.pack yt)
+        jOpts = const . Just $ opts
+    traverse_ tyt (youTube opts)
+    allGood . kInstance . config $ opts
+    -- when (isJust . youtube $ opts) $ tyt
 
 allGood :: KodiInstance -> IO ()
 allGood ki = do

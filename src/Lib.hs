@@ -79,11 +79,6 @@ initKState ki = do
   vol   <- getVolume ki
   return $ KState ki "window" p vol
 
--- getItem :: KodiInstance -> IO (Maybe MediaDetails)
-getItem k = runMaybeT $ do
-  player <- liftIO $ getPlayer k
-  return player
-
 getVolume' :: Kaller -> MaybeT IO Volume
 getVolume' kaller = MaybeT $ do
   volR <- kaller $ Application.getProperties [Application.Volume, Application.Muted]
@@ -118,10 +113,30 @@ getTimes ki = do
 
 getPlayer :: KodiInstance -> IO (Maybe Player)
 getPlayer ki = runMaybeT $ do
-  pid <- MaybeT $ eitherToMaybe <$> getPlayerId ki
-  pprops <- MaybeT $ getPProps pid
-  times <- MaybeT $ return (parseMaybe parseJSON pprops) :: MaybeT IO TimeProgress
-  speed <- MaybeT $ return $ parseMaybe (withObject "Speed" (.: "speed")) pprops :: MaybeT IO Float
-  let media = Media "" "" Movie 0
+  pid       <- MaybeT $ eitherToMaybe <$> getPlayerId ki
+  pprops    <- MaybeT $ getPProps pid
+  times     <- MaybeT . pure $ tdb $ parseMaybe parseJSON pprops                         :: MaybeT IO TimeProgress
+  speed     <- MaybeT . pure $ tdb $ parseMaybe (withObject "Speed" (.: "speed")) pprops :: MaybeT IO Float
+  mediatype <- MaybeT . pure $ tdb $ parseMaybe (withObject "Media" (.: "type")) pprops  :: MaybeT IO String
+  media     <- MaybeT $ getItem ki pid
   return $ Player speed pid (_elapsed times) (_total times) media
-    where getPProps pid = eitherToMaybe <$> kall ki (Player.getProperties pid [Player.Time, Player.Totaltime, Player.Speed])
+    where getPProps pid = eitherToMaybe <$> kall ki (Player.getProperties pid props)
+          props         = [Player.Time, Player.Totaltime, Player.Speed, Player.Type]
+
+-- getItem :: KodiInstance -> IO (Maybe Media)
+getItem ki pid = runMaybeT $ do
+  item      <- MaybeT $ eitherToMaybe <$> kall ki (Player.getItem pid [All.Title, All.File, All.Duration])
+  liftIO . print $ item
+  media     <- MaybeT . pure $ parseMaybe parseItem item
+  return media
+
+parseItem = withObject "Item" $ \o -> do
+  i <- (o.:"item") 
+  Media <$> (i.:"title") <*> (i.:"file") <*> pure 0  <*> pure Movie
+
+throwYoutube :: KodiInstance -> T.Text -> IO (Either String String)
+throwYoutube ki url = do
+  print "Throwing to youtube..."
+  let id = Player.matchYouTubeId url
+  maybe (pure . Left $ "Could not find video ID") doTheThing id
+    where doTheThing vidId = either (Left . show) (const . Right $ "OK") <$> (kall ki $ Player.openYoutube vidId)
