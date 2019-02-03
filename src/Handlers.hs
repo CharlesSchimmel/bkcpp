@@ -43,12 +43,13 @@ handleNotif ui (Just notif) = notifMethodHandler (notif^.notifMethod) (notif^.no
 handleNotif ui _        = continue ui
 
 notifMethodHandler :: String -> Object -> KState -> EventM Name (Next KState)
-notifMethodHandler "Player.OnPause"   p k            = continue         $ (updatePlayerId p . updateSpeed p) k
-notifMethodHandler "Player.OnStop"    _ k            = continue         $ k & player .~ Nothing
-notifMethodHandler "Player.OnPlay"    p k            = (liftIO . updatePlayerProps $ (updateSpeed (tdb p) . updatePlayerId p) k) >>= continue
-notifMethodHandler "PlayList.OnClear" p k            = notifMethodHandler "Player.OnPlay" p k
-notifMethodHandler "Player.OnSeek"    p k            = continue         $ (updatePlayerId p . updateSpeed p . updateTime p) k
-notifMethodHandler "Application.OnVolumeChanged" p k = continue         $ updateVolume (Object p) k
+notifMethodHandler "Player.OnPause"   p k            = continue $ (updatePlayerId p . updateSpeed p) k
+notifMethodHandler "Player.OnStop"    _ k            = continue $ k & player .~ Nothing
+notifMethodHandler "Player.OnPlay"    p k            = (liftIO . updatePlayerProps $ (updateSpeed p . updatePlayerId p) k) >>= continue
+notifMethodHandler "Playlist.OnClear" _ ui           = (liftIO ui') >>= continue
+  where ui' = (flip (set player) ui) <$> getPlayer (ui^.k)
+notifMethodHandler "Player.OnSeek"    p k            = continue $ (updatePlayerId p . updateSpeed p . updateTime p) k
+notifMethodHandler "Application.OnVolumeChanged" p k = continue $ updateVolume (Object p) k
 -- notifMethodHandler params "Player.OnResume" ks = continue $ ks & player .~ ((ks^.player) & speed .~ 1.0)
 notifMethodHandler _ _ ks                 = continue ks
 
@@ -58,7 +59,7 @@ handleVtyEvent ui (V.EvKey k [])           = handleKey ui k
 handleVtyEvent ui _                        = continue ui
 
 handleKey :: KState -> Key -> EventM n (Next KState)
-handleKey ui V.KEnter = kallState ui I.select
+handleKey ui V.KEnter = sact ui I.Select >> continue ui
 handleKey ui V.KBS    = kallState ui I.back
 handleKey ui _        = continue ui
 

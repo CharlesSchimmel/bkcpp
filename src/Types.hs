@@ -6,12 +6,16 @@ module Types where
 
 import           KodiRPC.Types.Base
 
+import           Control.Applicative
+import           Control.Monad
+import           Control.Monad.Trans.Reader
 import           Data.Aeson
+import           Data.Aeson.Types
 import           Data.Maybe
+import           Data.Text
 import           Debug.Trace
 import           GHC.Generics
 import           Lens.Micro.Platform
-import           Control.Monad.Trans.Reader
 
 type Name = ()
 type KApp = ReaderT KState IO
@@ -45,14 +49,22 @@ data MediaDetails =
   , _displayArtist :: String
   }
   |
-  Movie
-  |
   Episode
   { _episode       :: Int
   , _showtitle     :: String
   , _season        :: Int
   }
+  |
+  Movie
   deriving (Show)
+
+instance FromJSON MediaDetails where
+  parseJSON = withObject "MediaDetails" $ \o -> do
+    i <- o.:"item"
+    let au = Audio <$> i.:"album" <*> i.:"artist" <*> i.:"albumartist" <*> i.:"displayartist"
+    let ep = Episode <$> i.:"episode" <*> i.:"showtitle" <*> i.:"season"
+    let mv = pure Movie
+    au <|> ep <|> mv
 
 data Player = Player
   { _speed         :: Float
@@ -75,9 +87,10 @@ instance Show Volume where
     | otherwise = padInt p
 
 instance FromJSON Volume where
-  parseJSON = withObject "Volume " $ \o -> Volume
-    <$> o.:"volume"
-    <*> o.:"muted"
+  parseJSON = withObject "Volume " $ \o -> do
+    vol <- o.:"volume" :: Parser Double
+    let vol' = floor vol
+    Volume vol' <$> o.:"muted"
 
 clearPlayer (Player _ _ _ _ e) = Player 0 0 mempty mempty e
 tdb_ x = trace (show x) x
@@ -135,7 +148,7 @@ data Tick = Tick
 
 type BChanEvent = Either Tick (Maybe Notif)
 
-data Config = Config
+newtype Config = Config
   { kInstance :: KodiInstance
   } deriving (Show)
 

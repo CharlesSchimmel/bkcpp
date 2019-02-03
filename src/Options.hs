@@ -14,6 +14,7 @@ argParse = Options <$> configParse
    ( long "youtube"
    <> short 'y'
    <> metavar "yt"
+   <> value Nothing
    <> help "YouTube url to cast"
    )
 

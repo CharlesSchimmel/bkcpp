@@ -15,6 +15,7 @@ import qualified KodiRPC.Types.Fields.All as All
 
 import           Brick
 
+import           Control.Applicative
 import           Control.Concurrent
 import           Control.Monad
 import           Control.Monad.Trans.Maybe
@@ -23,7 +24,7 @@ import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Either           as E
 import           Data.HashMap.Lazy     as HM
-import           Data.List             (intercalate)
+import           Data.List (intercalate)
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Scientific
@@ -34,6 +35,7 @@ import           Lens.Micro.Platform   ((%~), (&), (^.), (.~), set, over)
 import           Network.Socket        (withSocketsDo)
 import           Prelude               as P
 import qualified Network.WebSockets    as WS
+import           Safe as S
 
 updateSpeed :: Object -> KState -> KState
 updateSpeed    p ks = ks & player %~ fmap (speed .~ extractSpeed p)
@@ -41,18 +43,6 @@ updatePlayerId p ks = ks & player %~ fmap (playerId .~ extractPlayerId p)
 updateTime     p ks = ks & player %~ fmap (timeElapsed .~ extractTime p)
 updateVolume   p ks = ks & volume .~ extractVolume p
 updateTitle    p ks = ks & title  .~ T.unpack (extractTitle p)
-
-updatePlayerProps :: KState -> IO KState
-updatePlayerProps ki = fromMaybe ki <$> withMaybe
-    where withMaybe = runMaybeT $ do
-                      pid        <- MaybeT . pure $ _playerId <$>(ki^.player) :: MaybeT IO Int
-                      maybeProps <- MaybeT $ eitherToMaybe <$> kall (ki^.k) (Player.getProperties pid [Player.Time, Player.Totaltime, Player.Speed])
-                      let parseProps p = MaybeT . pure $ parseMaybe p maybeProps
-                      speed'     <- parseProps (withObject "Speed" (.:"speed"))                   :: MaybeT IO Float
-                      elapse     <- parseProps (withObject "TimeE" (.:"time") >=> parseJSON)      :: MaybeT IO Time
-                      remain     <- parseProps (withObject "TimeR" (.:"totaltime") >=> parseJSON) :: MaybeT IO Time
-                      let plyr' = (speed .~ speed') . (timeElapsed .~ elapse) . (timeRemaining .~ remain)
-                      return $ ki & player %~ fmap plyr'
 
 extractPlayerId :: Object -> Int
 extractPlayerId p = maybe 0 (ceiling . toRealFloat) $ flip parseMaybe p $ (.:"player") >=> (.:"playerid")
@@ -82,7 +72,7 @@ initKState ki = do
 getVolume' :: Kaller -> MaybeT IO Volume
 getVolume' kaller = MaybeT $ do
   volR <- kaller $ Application.getProperties [Application.Volume, Application.Muted]
-  return $ eitherToMaybe volR >>= (parseMaybe parseJSON)
+  return $ eitherToMaybe volR >>= parseMaybe parseJSON
 
 getVolume :: KodiInstance -> IO Volume
 getVolume ki = do
@@ -113,30 +103,60 @@ getTimes ki = do
 
 getPlayer :: KodiInstance -> IO (Maybe Player)
 getPlayer ki = runMaybeT $ do
-  pid       <- MaybeT $ eitherToMaybe <$> getPlayerId ki
-  pprops    <- MaybeT $ getPProps pid
-  times     <- MaybeT . pure $ tdb $ parseMaybe parseJSON pprops                         :: MaybeT IO TimeProgress
-  speed     <- MaybeT . pure $ tdb $ parseMaybe (withObject "Speed" (.: "speed")) pprops :: MaybeT IO Float
-  mediatype <- MaybeT . pure $ tdb $ parseMaybe (withObject "Media" (.: "type")) pprops  :: MaybeT IO String
-  media     <- MaybeT $ getItem ki pid
-  return $ Player speed pid (_elapsed times) (_total times) media
+  pid   <- MaybeT $ eitherToMaybe <$> getPlayerId ki
+  props <- MaybeT $ getPProps pid
+  let pProps x   = parseMaybe x props
+      times      = pProps parseJSON                           :: Maybe TimeProgress
+      speed      = pProps $ withObject "Speed" (.:"speed")    :: Maybe Float
+      mediatype  = pProps $ withObject "MediaType" (.:"type") :: Maybe String
+  media <- MaybeT $ getItem ki pid
+  MaybeT . pure $ Player <$> speed <*> Just pid <*> (_elapsed <$> times) <*> (_total <$> times) <*> Just media
     where getPProps pid = eitherToMaybe <$> kall ki (Player.getProperties pid props)
           props         = [Player.Time, Player.Totaltime, Player.Speed, Player.Type]
 
--- getItem :: KodiInstance -> IO (Maybe Media)
-getItem ki pid = runMaybeT $ do
-  item      <- MaybeT $ eitherToMaybe <$> kall ki (Player.getItem pid [All.Title, All.File, All.Duration])
-  liftIO . print $ item
-  media     <- MaybeT . pure $ parseMaybe parseItem item
-  return media
+updatePlayerProps :: KState -> IO KState
+updatePlayerProps ki = do
+  plyr <- getPlayer (ki^.k)
+  return $ ki & player .~ plyr
 
-parseItem = withObject "Item" $ \o -> do
-  i <- (o.:"item") 
-  Media <$> (i.:"title") <*> (i.:"file") <*> pure 0  <*> pure Movie
+getItem :: KodiInstance -> Int -> IO (Maybe Media)
+getItem ki pid = runMaybeT $ do
+  item      <- MaybeT $ eitherToMaybe <$> kall ki (Player.getItem pid fields)
+  let md = parseMaybe parseJSON item :: Maybe MediaDetails
+  MaybeT . pure $ parseMaybe parseItem' item
+    where parseItem = withObject "Item" $ \o -> do
+                i <- o.:"item"
+                Media <$> (i.:"title") <*> (i.:"file") <*> pure 0
+          parseItem' x = parseJSON x <**> parseItem x
+          fields = [All.Album, All.Title, All.File, All.Duration, All.Albumartist, All.Artist, All.Displayartist, All.Episode, All.Showtitle, All.Season]
 
 throwYoutube :: KodiInstance -> T.Text -> IO (Either String String)
 throwYoutube ki url = do
   print "Throwing to youtube..."
   let id = Player.matchYouTubeId url
   maybe (pure . Left $ "Could not find video ID") doTheThing id
-    where doTheThing vidId = either (Left . show) (const . Right $ "OK") <$> (kall ki $ Player.openYoutube vidId)
+    where doTheThing vidId = either (Left . show) (const . Right $ "OK") <$> kall ki (Player.openYoutube vidId)
+
+mediaTitle :: Media -> String
+mediaTitle (Media title _ _ Movie) = title
+mediaTitle (Media title _ _ (Episode episode series season)) = intercalate " - " parts
+  where parts = [series, intercalate "x" $ P.map show [season, episode], title]
+mediaTitle (Media title _ _ (Audio album _ albumArtist _)) = intercalate " - " parts
+  where parts = catMaybes [pure title, headMay albumArtist, pure album]
+
+subTitle :: MediaDetails -> String
+subTitle Movie = " "
+subTitle (Episode episode series season) = intercalate " - " [seasonXEpisode, series]
+  where parts = [seasonXEpisode, series]
+        seasonXEpisode = intercalate "x" $ P.map show [season, episode]
+subTitle (Audio album _ albumArtist _) = intercalate " - " parts
+  where parts = catMaybes [headMay albumArtist, pure album]
+
+
+safeHead [] = Nothing
+safeHead (x:_) = Just x
+
+playerTitle :: Maybe Player -> String
+playerTitle = maybe "Nothing Playing" (mediaTitle . _media)
+
+htpc = KodiInstance "192.168.1.4" 8080 "" ""

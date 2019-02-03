@@ -13,6 +13,7 @@ import           Brick.Types           as BT
 import qualified Brick.Widgets.Center  as C
 import qualified Graphics.Vty          as V
 import           Lens.Micro.Platform   ((%~), (&), (^.), (.~), set, over)
+import           Data.List (intercalate)
 
 
 app = App { appDraw = drawUI
@@ -23,25 +24,30 @@ app = App { appDraw = drawUI
           }
 
 topLine ui = hBox [ padRight (Pad 1) . str $ timeString ui
-                  , C.hCenter . withAttr attrTitle . str $ maybe "blah" (\p -> p^.media.title) (ui^.player)
+                  , C.hCenter . withAttr attrTitle . str $ maybe " " (^.media.title) (ui^.player)
                   , padLeft (Pad 2) . str $ "Vol: " ++ show (ui^.volume) ++ "%"
                   ]
 
-midLine ui = hBox [ padLeft (Pad 1) . str $ isPlayingStr ui ]
-                  -- album if available, maybe 
+midLine ui = hBox [ padRight (Pad 1) . withAttr playPause . str $ isPlayingStr ui 
+                  , C.hCenter . withAttr attrTitle . str $ maybe " " (subTitle . (^.media.details)) (ui^.player)
+                  ]
 
-drawUI ui = [ topLine ui
-            -- , C.hCenterWith (Just '-') $ str "-"
-            , C.hCenterWith (Just '-') $ str "-"
+headers ui = vBox [ topLine ui
             , midLine ui
+            , C.hCenterWith (Just '-') $ str "-"
             ]
 
-someText = attrName "someText"
-attrTitle    = attrName "title"
+drawUI ui = [headers ui]
+
+someText  = attrName "someText"
+attrTitle = attrName "title"
+playPause = attrName "playPause"
 
 theMap = attrMap V.defAttr [ (someText, fg V.cyan)
                            , (attrTitle, fg V.white)
+                           , (playPause, fg V.white)
                            ]
 
 isPlayingStr :: KState -> String
-isPlayingStr k = maybe "stopped" (\p -> if (p^.speed) > 0 then "playing" else "paused") $ k^.player
+isPlayingStr k = intercalate "" ["[", status, "]"]
+  where status = maybe "stopped" (\p -> if (p^.speed) > 0 then "playing" else "paused") $ k^.player
