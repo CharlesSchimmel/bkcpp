@@ -37,3 +37,7 @@ Available options:
   -y,--youtube yt          YouTube url to cast
   -h,--help                Show this help text
 ```
+
+Keyboard movement is largely the same as the [default Kodi keyboard
+controls](https://kodi.wiki/view/Keyboard_controls) with the exception of `hjkl`
+being used for directional navigation.
