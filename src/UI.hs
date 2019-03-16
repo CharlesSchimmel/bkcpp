@@ -11,16 +11,17 @@ import           Brick.AttrMap
 import           Brick.BChan
 import           Brick.Types           as BT
 import qualified Brick.Widgets.Center  as C
+import Brick.Widgets.Core
 import qualified Graphics.Vty          as V
 import           Lens.Micro.Platform   ((%~), (&), (^.), (.~), set, over)
 import           Data.List (intercalate)
 
 
-app = App { appDraw = drawUI
+app = App { appDraw         = drawUI
           , appChooseCursor = neverShowCursor
-          , appHandleEvent = handleEvent
-          , appStartEvent = return
-          , appAttrMap = const theMap
+          , appHandleEvent  = handleEvent
+          , appStartEvent   = return
+          , appAttrMap      = const theMap
           }
 
 topLine ui = hBox [ padRight (Pad 1) . str $ timeString ui
@@ -29,13 +30,16 @@ topLine ui = hBox [ padRight (Pad 1) . str $ timeString ui
                   ]
 
 midLine ui = hBox [ padRight (Pad 1) . withAttr playPause . str $ isPlayingStr ui 
-                  , C.hCenter . withAttr attrTitle . str $ maybe " " (subTitle . (^.media.details)) (ui^.player)
+                  , C.hCenterLayer . withAttr attrTitle . str $ maybe " " (subTitle . (^.media.details)) (ui^.player)
+                  , padLeft (Pad 1) . withAttr playPause . str $ "          "
                   ]
 
 headers ui = vBox [ topLine ui
             , midLine ui
-            , C.hCenterWith (Just '-') $ str "-"
+            , C.hCenter emptyWidget
             ]
+
+playList ui = emptyWidget
 
 drawUI ui = [headers ui]
 

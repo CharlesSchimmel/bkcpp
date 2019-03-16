@@ -132,7 +132,7 @@ getItem ki pid = runMaybeT $ do
 
 throwYoutube :: KodiInstance -> T.Text -> IO (Either String String)
 throwYoutube ki url = do
-  print "Throwing to youtube..."
+  putStrLn "Throwing to youtube..."
   let id = Player.matchYouTubeId url
   maybe (pure . Left $ "Could not find video ID") doTheThing id
     where doTheThing vidId = either (Left . show) (const . Right $ "OK") <$> kall ki (Player.openYoutube vidId)

@@ -1,10 +1,10 @@
-name:                bkpp
+name:                bkcpp
 version:             0.1.0.0
-github:              "githubuser/bkpp"
+github:              "CharlesSchimmel/bkcpp"
 license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2018 Author name here"
+author:              "Charles Schimmel"
+maintainer:          ""
+copyright:           ""
 
 extra-source-files:
 - README.md
@@ -41,7 +41,7 @@ library:
   source-dirs: src
 
 executables:
-  bkpp-exe:
+  bkcpp:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -49,10 +49,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - bkpp
+    - bkcpp
 
 tests:
-  bkpp-test:
+  bkcpp-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -60,4 +60,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - bkpp
+    - bkcpp

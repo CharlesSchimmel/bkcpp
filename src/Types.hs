@@ -6,6 +6,7 @@ module Types where
 
 import           KodiRPC.Types.Base
 
+import Prelude as P
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Trans.Reader
@@ -61,8 +62,10 @@ data MediaDetails =
 instance FromJSON MediaDetails where
   parseJSON = withObject "MediaDetails" $ \o -> do
     i <- o.:"item"
+    episode <- i.:"episode"
+    let episode' = if episode <= 0 then fail "" else pure episode
     let au = Audio <$> i.:"album" <*> i.:"artist" <*> i.:"albumartist" <*> i.:"displayartist"
-    let ep = Episode <$> i.:"episode" <*> i.:"showtitle" <*> i.:"season"
+    let ep = Episode <$> episode' <*> i.:"showtitle" <*> i.:"season"
     let mv = pure Movie
     au <|> ep <|> mv
 
@@ -117,8 +120,8 @@ instance Monoid Time where
 padInt x = if x < 10 then "0" ++ show x else show x
 
 instance Show Time where
-  show (Time 0 a b _) = padInt a ++ ":" ++ padInt b
-  show (Time a b c _) = padInt a ++ ":" ++ padInt b ++ ":" ++ padInt c
+  show (Time 0 a b _) = show a ++ ":" ++ padInt b
+  show (Time a b c _) = show a ++ ":" ++ padInt b ++ ":" ++ padInt c
 
 data TimeProgress = TimeProgress
   { _elapsed :: Time
@@ -128,10 +131,6 @@ data TimeProgress = TimeProgress
 instance Monoid TimeProgress where
   mempty = TimeProgress mempty mempty
   mappend mempty b = b
-  mappend b mempty = b
-  mappend (TimeProgress a b) (TimeProgress c d)
-    | b == d = TimeProgress c d
-    | otherwise = TimeProgress c d
 
 instance FromJSON TimeProgress where
   parseJSON = withObject "TimeProgress" $ \o -> TimeProgress

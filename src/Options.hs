@@ -10,13 +10,12 @@ import Data.Semigroup ((<>))
 
 -- argParse :: Parser Config
 argParse = Options <$> configParse
-  <*> option auto
+  <*> (optional $ strOption
    ( long "youtube"
    <> short 'y'
    <> metavar "yt"
-   <> value Nothing
    <> help "YouTube url to cast"
-   )
+   ))
 
 configParse = Config <$> kodiInstanceParse
 
