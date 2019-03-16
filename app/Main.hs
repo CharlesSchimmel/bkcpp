@@ -25,7 +25,7 @@ import           Data.Text as T
 
 main :: IO ()
 main = conf >>= main'
-  where conf = execParser $ info (argParse <**> helper) ( fullDesc <> progDesc "Brick Kodi Client Plus Plus - A TUI Kodi Interface")
+  where conf = execParser $ info (argParse <**> helper) ( fullDesc <> header "Brick Kodi Client Plus Plus" <> progDesc "A TUI client for the Kodi Media Center.")
 
 main' :: Options -> IO ()
 main' opts = ping (kInstance . config $ opts) >>= maybe notGood (const . switchboard $ opts)

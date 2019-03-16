@@ -32,17 +32,17 @@ kodiInstanceParse = KodiInstance
     <> showDefault
     <> metavar "port"
     <> value 8080
-    <> help "Port - 8080 if you haven't changed it"
+    <> help "Port"
     )
   <*> option auto
     (  long "username"
     <> value ""
     <> metavar "user"
-    <> help "Username (not usually set)"
+    <> help "Username"
     )
   <*> option auto
     (  long "password"
     <> value ""
     <> metavar "pass"
-    <> help "Password (not usually set)"
+    <> help "Password"
     )
