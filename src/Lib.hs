@@ -67,17 +67,15 @@ initKState :: KodiInstance -> IO KState
 initKState ki = do
   p     <- getPlayer ki
   vol   <- getVolume ki
-  return $ KState ki "window" p vol
+  return $ KState ki "window" p vol Playlist
 
-getVolume' :: Kaller -> MaybeT IO Volume
-getVolume' kaller = MaybeT $ do
-  volR <- kaller $ Application.getProperties [Application.Volume, Application.Muted]
-  return $ eitherToMaybe volR >>= parseMaybe parseJSON
+getVolume' :: Monad m => Kaller m -> m (Maybe Volume)
+getVolume' kallr = do
+  volEither <- kallr $ Application.getProperties [Application.Volume, Application.Muted]
+  return $ eitherToMaybe volEither >>= (parseMaybe parseJSON)
 
 getVolume :: KodiInstance -> IO Volume
-getVolume ki = do
-  vol <-  kall ki $ Application.getProperties [Application.Volume, Application.Muted]
-  return $ fromRight (Volume 0 False) $ extractVolume <$> vol
+getVolume ki = fromMaybe (Volume 0 False) <$> getVolume' (kall ki)
 
 timeString :: KState -> String
 timeString k = elapsed ++ "/" ++ remaining
@@ -85,8 +83,11 @@ timeString k = elapsed ++ "/" ++ remaining
         remaining = P.show $ maybe mempty _timeRemaining (k ^. player )
 
 getPlayerId :: KodiInstance -> IO (Either RpcException Int)
-getPlayerId ki = do
-  res <- kall ki Player.getActivePlayers -- Either e Value
+getPlayerId ki = getPlayerId' (kall ki)
+
+getPlayerId' :: Monad m => Kaller m -> m (Either RpcException Int)
+getPlayerId' kallr = do
+  res <- kallr Player.getActivePlayers -- Either e Value
   return $ parsley' =<< res
   where parsley p = flip (withArray "arr") p $ \a ->
           if V.null a then fail "Received no PlayerId"
@@ -94,12 +95,42 @@ getPlayerId ki = do
         unify = ReqException . String . T.pack -- ToDo
         parsley' p = mapLeft unify $ parseEither parsley p
 
+getTimes' :: Monad m =>
+  Kaller m ->
+  PlayerId ->
+  m (Maybe TimeProgress)
+getTimes' kallr pid = do
+  props <- getProps pid
+  return $ parseMaybe parseJSON =<< props
+    where getProps p = eitherToMaybe <$> kallr (Player.getProperties p [Player.Time, Player.Totaltime])
+
 getTimes :: KodiInstance -> IO (Maybe TimeProgress)
 getTimes ki = do
   pid <- eitherToMaybe <$> getPlayerId ki
   props <- maybe (pure Nothing) getProps pid
   return $ parseMaybe parseJSON =<< props
     where getProps p = eitherToMaybe <$> kall ki (Player.getProperties p [Player.Time, Player.Totaltime])
+
+type PlayerId = Int
+
+getPlayer' :: 
+  Monad m =>
+  Kaller m ->
+  PlayerId ->
+  (Kaller m -> PlayerId -> m (Maybe Media)) ->
+  m (Maybe Player)
+getPlayer' kallr pid itemGetr = runMaybeT $ do
+  props <- MaybeT $ getPProps pid
+  let pProps x   = parseMaybe x props
+      times      = pProps parseJSON                           :: Maybe TimeProgress
+      speed      = pProps $ withObject "Speed" (.:"speed")    :: Maybe Float
+      mediatype  = pProps $ withObject "MediaType" (.:"type") :: Maybe String
+  media <- MaybeT $ itemGetr kallr pid
+  MaybeT . pure $ Player <$> speed <*> Just pid <*> (_elapsed <$> times) <*> (_total <$> times) <*> Just media
+    where getPProps pid = eitherToMaybe <$> kallr (Player.getProperties pid props)
+          props         = [Player.Time, Player.Totaltime, Player.Speed, Player.Type]
+
+doGetPlayer ki pid = getPlayer' (kall ki) pid getItem'
 
 getPlayer :: KodiInstance -> IO (Maybe Player)
 getPlayer ki = runMaybeT $ do
@@ -130,12 +161,40 @@ getItem ki pid = runMaybeT $ do
           parseItem' x = parseJSON x <**> parseItem x
           fields = [All.Album, All.Title, All.File, All.Duration, All.Albumartist, All.Artist, All.Displayartist, All.Episode, All.Showtitle, All.Season]
 
+getItem' :: Monad m => Kaller m -> PlayerId -> m (Maybe Media)
+getItem' kallr pid = runMaybeT $ do
+  item      <- MaybeT $ eitherToMaybe <$> kallr (Player.getItem pid fields)
+  let md = parseMaybe parseJSON item :: Maybe MediaDetails
+  MaybeT . pure $ parseMaybe parseItem' item
+    where parseItem = withObject "Item" $ \o -> do
+                i <- o.:"item"
+                Media <$> (i.:"title") <*> (i.:"file") <*> pure 0
+          parseItem' x = parseJSON x <**> parseItem x
+          fields = [ All.Album
+                   , All.Title
+                   , All.File
+                   , All.Duration
+                   , All.Albumartist
+                   , All.Artist
+                   , All.Displayartist
+                   , All.Episode
+                   , All.Showtitle
+                   , All.Season
+                   ]
+
 throwYoutube :: KodiInstance -> T.Text -> IO (Either String String)
 throwYoutube ki url = do
   putStrLn "Throwing to youtube..."
   let id = Player.matchYouTubeId url
   maybe (pure . Left $ "Could not find video ID") doTheThing id
     where doTheThing vidId = either (Left . show) (const . Right $ "OK") <$> kall ki (Player.openYoutube vidId)
+
+-- throwYoutube' :: Kodiable -> T.Text -> IO (Either String String)
+-- throwYoutube' ki kable url = do
+--   putStrLn "Throwing to youtube..."
+--   let id = Player.matchYouTubeId url
+--   maybe (pure . Left $ "Could not find video ID") doTheThing id
+--     where doTheThing vidId = either (Left . show) (const . Right $ "OK") <$> kable ki
 
 mediaTitle :: Media -> String
 mediaTitle (Media title _ _ Movie) = title

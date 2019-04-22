@@ -10,12 +10,7 @@ import Data.Semigroup ((<>))
 
 -- argParse :: Parser Config
 argParse = Options <$> configParse
-  <*> (optional $ strOption
-   ( long "youtube"
-   <> short 'y'
-   <> metavar "yt"
-   <> help "YouTube url to cast"
-   ))
+  <*> parseCast
 
 configParse = Config <$> kodiInstanceParse
 
@@ -46,3 +41,29 @@ kodiInstanceParse = KodiInstance
     <> metavar "pass"
     <> help "Password"
     )
+
+parseCastYt = Youtube <$> strOption
+   ( long "youtube"
+   <> short 'y'
+   <> metavar "url"
+   <> help "YouTube url to cast"
+   )
+
+parseCastFile = CastFile <$> strOption
+  (  long "cast-file"
+  <> short 'f'
+  <> metavar "file"
+  <> help "File to cast"
+  )
+
+queueOption = switch 
+  ( short 'q' 
+  <> long "queue"
+  <> help "Add casted media to current playlist"
+  )
+
+parseCastMedia = parseCastYt <|> parseCastFile
+
+parseCast = optional $ Cast <$> parseCastMedia <*> queueOption
+
+-- bkcpp  -yt urlhere -q

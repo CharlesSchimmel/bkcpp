@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
 import Lib
@@ -5,6 +6,8 @@ import UI
 import Handlers
 import Types
 import Options
+import KodiRPC.Methods.Playlist as Playlist (add)
+import KodiRPC.Methods.Player as Player (asYTPluginPath, matchYouTubeId, openPath)
 import KodiRPC.Types.Base
 import KodiRPC.Calls
 
@@ -32,11 +35,10 @@ main' opts = ping (kInstance . config $ opts) >>= maybe notGood (const . switchb
 
 switchboard :: Options -> IO ()
 switchboard opts = do
-    let tyt yt = throwYoutube (kInstance . config $ opts) (T.pack yt)
-        jOpts = const . Just $ opts
-    traverse_ tyt (youTube opts)
-    allGood . kInstance . config $ opts
-    -- when (isJust . youtube $ opts) $ tyt
+    traverse_ kaller $ cast opts >>= caster
+    allGood ki
+    where ki = kInstance . config $ opts
+          kaller = kall ki
 
 allGood :: KodiInstance -> IO ()
 allGood ki = do
@@ -57,3 +59,15 @@ justListenToNotifs = forever $ print =<< notification test
 
 justListenToNotifs' :: KodiInstance -> IO ()
 justListenToNotifs' ki = forever $ print =<< notification ki
+
+caster :: Cast -> Maybe Method
+caster cast = method
+    where castMethod = if queue cast then castAdd else castPlay
+          file = castFormat (toCast cast)
+          castAdd = Playlist.add 0
+          castPlay = Player.openPath
+          method = castMethod <$> file
+
+castFormat :: Castable -> Maybe Text
+castFormat (Youtube y)  = (fmap asYTPluginPath) . matchYouTubeId . T.pack $ y
+castFormat (CastFile f) = Just . T.pack $ f

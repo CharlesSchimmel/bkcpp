@@ -21,13 +21,18 @@ import           Lens.Micro.Platform
 type Name = ()
 type KApp = ReaderT KState IO
 
-type Kaller = Method -> IO (Either RpcException Value)
+type KResult a = Either RpcException a
 
+data ViewState = Playlist | YouTubeCast
+  deriving ( Show ) 
+
+-- AppState
 data KState = KState
   { _k          :: KodiInstance
   , _window     :: String
   , _player     :: Maybe Player
   , _volume     :: Volume
+  , _viewState  :: ViewState
   }
   deriving (Show)
 
@@ -153,8 +158,15 @@ newtype Config = Config
 
 data Options = Options
   { config :: Config
-  , youTube :: Maybe String
+  , cast :: Maybe Cast
   } deriving (Show)
+
+data Cast = Cast { toCast :: Castable
+                 , queue  :: Bool
+                 } deriving ( Show )
+
+data Castable = Youtube String | CastFile String
+  deriving ( Show )
 
 addSec :: Time -> Time
 addSec (Time h n s m) = Time h' n'' s'' m
