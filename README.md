@@ -26,18 +26,23 @@ stack install
 
 ```
 Usage: bkcpp (-a|--ip-address ip) [-p|--port port] [--username user]
-             [--password pass] [-y|--youtube yt]
-  Brick Kodi Client Plus Plus - A TUI Kodi Interface
+             [--password pass] ([-y|--youtube url] | [-f|--cast-file file])
+             [-q|--queue]
+  A TUI client for the Kodi Media Center.
 
 Available options:
   -a,--ip-address ip       IP address of running Kodi Media Center
-  -p,--port port           Port - 8080 if you haven't changed it (default: 8080)
-  --username user          Username (not usually set)
-  --password pass          Password (not usually set)
-  -y,--youtube yt          YouTube url to cast
+  -p,--port port           Port (default: 8080)
+  --username user          Username
+  --password pass          Password
+  -y,--youtube url         YouTube url to cast
+  -f,--cast-file file      File to cast
+  -q,--queue               Add casted media to current playlist
   -h,--help                Show this help text
 ```
 
 Keyboard movement is largely the same as the [default Kodi keyboard
 controls](https://kodi.wiki/view/Keyboard_controls) with the exception of `hjkl`
 being used for directional navigation.
+Brick Kodi Client Plus Plus
+
