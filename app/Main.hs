@@ -10,6 +10,7 @@ import KodiRPC.Methods.Playlist as Playlist (add)
 import KodiRPC.Methods.Player as Player (asYTPluginPath, matchYouTubeId, openPath)
 import KodiRPC.Types.Base
 import KodiRPC.Calls
+import System.Exit
 
 import           Brick
 import           Brick.AttrMap
@@ -35,8 +36,8 @@ main' opts = ping (kInstance . config $ opts) >>= maybe notGood (const . switchb
 
 switchboard :: Options -> IO ()
 switchboard opts = do
-    traverse_ kaller $ cast opts >>= caster
-    allGood ki
+    castRes <- traverse kaller $ caster =<< cast opts
+    if (oneShot opts) then pure () else allGood ki
     where ki = kInstance . config $ opts
           kaller = kall ki
 
@@ -51,7 +52,7 @@ allGood ki = do
   void $ customMain (V.mkVty V.defaultConfig) (Just chan) app initK
 
 notGood :: IO ()
-notGood = void $ putStrLn couldNotConnect
+notGood = void $ die couldNotConnect
   where couldNotConnect = "Could not connect. Settings correct? Kodi running? Network control enabled?"
 
 justListenToNotifs :: IO ()

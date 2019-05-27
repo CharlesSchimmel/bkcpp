@@ -78,6 +78,12 @@ handleChar ui ' '  = kallState ui $ I.executeAction I.Playpause
 handleChar ui 'x'  = kallState ui $ I.executeAction I.Stop
 handleChar ui 'i'  = kallState ui $ I.executeAction I.Info
 
+-- volume
+handleChar ui '='  = kallState ui $ I.executeAction I.Info
+handleChar ui '+'  = kallState ui $ I.executeAction I.Info
+handleChar ui '-'  = kallState ui $ I.executeAction I.Info
+handleChar ui 'm'  = kallState ui $ I.executeAction I.Info
+
 -- else
 handleChar ui 'q'  = halt ui
 handleChar ui _    = continue ui

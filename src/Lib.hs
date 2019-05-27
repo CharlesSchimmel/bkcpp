@@ -113,7 +113,7 @@ getTimes ki = do
 
 type PlayerId = Int
 
-getPlayer' :: 
+getPlayer' ::
   Monad m =>
   Kaller m ->
   PlayerId ->

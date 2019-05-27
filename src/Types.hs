@@ -21,6 +21,11 @@ import           Lens.Micro.Platform
 type Name = ()
 type KApp = ReaderT KState IO
 
+-- new app type:
+data Stuff = Stuff 
+  {
+  } deriving ( Show )
+
 type KResult a = Either RpcException a
 
 data ViewState = Playlist | YouTubeCast
@@ -157,8 +162,9 @@ newtype Config = Config
   } deriving (Show)
 
 data Options = Options
-  { config :: Config
-  , cast :: Maybe Cast
+  { config  :: Config
+  , cast    :: Maybe Cast
+  , oneShot :: Bool
   } deriving (Show)
 
 data Cast = Cast { toCast :: Castable

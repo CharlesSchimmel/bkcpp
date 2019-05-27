@@ -9,8 +9,10 @@ import Options.Applicative
 import Data.Semigroup ((<>))
 
 -- argParse :: Parser Config
-argParse = Options <$> configParse
+argParse = Options
+  <$> configParse
   <*> parseCast
+  <*> parseOneShot
 
 configParse = Config <$> kodiInstanceParse
 
@@ -56,14 +58,22 @@ parseCastFile = CastFile <$> strOption
   <> help "File to cast"
   )
 
-queueOption = switch 
-  ( short 'q' 
+parseQueue = switch 
+  (  short 'q' 
   <> long "queue"
   <> help "Add casted media to current playlist"
   )
 
+parseOneShot = switch
+  (  short '1'
+  <> long "one-shot"
+  <> help "Perform a command and exit; do not open interface"
+  <> showDefault
+  )
+
+
 parseCastMedia = parseCastYt <|> parseCastFile
 
-parseCast = optional $ Cast <$> parseCastMedia <*> queueOption
+parseCast = optional $ Cast <$> parseCastMedia <*> parseQueue
 
 -- bkcpp  -yt urlhere -q
