@@ -29,7 +29,9 @@ dependencies:
 - aeson
 - network
 - streaming
+- megaparsec
 - microlens-platform
+- microlens
 - unordered-containers
 - scientific
 - transformers
@@ -48,6 +50,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -O2
     dependencies:
     - bkcpp
 
@@ -59,5 +62,6 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -O2
     dependencies:
     - bkcpp

@@ -3,6 +3,7 @@
 module Options where
 
 import Types
+import FormatParser
 import KodiRPC.Types.Base
 
 import Options.Applicative
@@ -64,16 +65,20 @@ parseQueue = switch
   <> help "Add casted media to current playlist"
   )
 
-parseOneShot = switch
-  (  short '1'
-  <> long "one-shot"
-  <> help "Perform a command and exit; do not open interface"
-  <> showDefault
-  )
+parseOneShot = optional $ OneShot <$>
+  ( flag' Nothing
+    (  short '1'
+    <> long "one-shot"
+    <> help "Perform a command and exit; do not open interface"
+    -- <> showDefault
+  ) *> oneShotFormat)
 
+oneShotFormat = optional $ strOption ( long "format"
+                          <> short 'f'
+                          <> metavar "fmt"
+                          <> help "One Shot output format"
+                          )
 
 parseCastMedia = parseCastYt <|> parseCastFile
 
 parseCast = optional $ Cast <$> parseCastMedia <*> parseQueue
-
--- bkcpp  -yt urlhere -q

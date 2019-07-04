@@ -72,12 +72,13 @@ data MediaDetails =
 instance FromJSON MediaDetails where
   parseJSON = withObject "MediaDetails" $ \o -> do
     i <- o.:"item"
-    episode <- i.:"episode"
-    let episode' = if episode <= 0 then fail "" else pure episode
-    let au = Audio <$> i.:"album" <*> i.:"artist" <*> i.:"albumartist" <*> i.:"displayartist"
-    let ep = Episode <$> episode' <*> i.:"showtitle" <*> i.:"season"
-    let mv = pure Movie
-    au <|> ep <|> mv
+    mediaType <- i.:"type" :: Parser String
+    let audio = Audio <$> i.:"album" <*> i.:"artist" <*> i.:"albumartist" <*> i.:"displayartist"
+        episo = Episode <$> i.:"episode" <*> i.:"showtitle" <*> i.:"season"
+    case mediaType of
+      "song"    -> Audio <$> i.:"album" <*> i.:"artist" <*> i.:"albumartist" <*> i.:"displayartist"
+      "episode" -> Episode <$> i.:"episode" <*> i.:"showtitle" <*> i.:"season"
+      _         -> pure Movie
 
 data Player = Player
   { _speed         :: Float
@@ -161,10 +162,12 @@ newtype Config = Config
   { kInstance :: KodiInstance
   } deriving (Show)
 
+data OneShot = OneShot { format :: Maybe String
+                       } deriving (Show)
 data Options = Options
   { config  :: Config
   , cast    :: Maybe Cast
-  , oneShot :: Bool
+  , oneShot :: Maybe OneShot
   } deriving (Show)
 
 data Cast = Cast { toCast :: Castable

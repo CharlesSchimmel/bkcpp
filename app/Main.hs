@@ -6,6 +6,7 @@ import UI
 import Handlers
 import Types
 import Options
+import FormatParser
 import KodiRPC.Methods.Playlist as Playlist (add)
 import KodiRPC.Methods.Player as Player (asYTPluginPath, matchYouTubeId, openPath)
 import KodiRPC.Types.Base
@@ -36,10 +37,13 @@ main' opts = ping (kInstance . config $ opts) >>= maybe notGood (const . switchb
 
 switchboard :: Options -> IO ()
 switchboard opts = do
-    castRes <- traverse kaller $ caster =<< cast opts
-    if (oneShot opts) then pure () else allGood ki
-    where ki = kInstance . config $ opts
-          kaller = kall ki
+  castRes <- traverse kaller $ caster =<< cast opts
+  initK <- initKState ki
+  if isJust $ oneShot opts then doOneShot initK else allGood ki
+  where ki = kInstance . config $ opts
+        kaller = kall ki
+
+doOneShot init = putStrLn $ generateLine defaultFormat init
 
 allGood :: KodiInstance -> IO ()
 allGood ki = do
@@ -52,8 +56,7 @@ allGood ki = do
   void $ customMain (V.mkVty V.defaultConfig) (Just chan) app initK
 
 notGood :: IO ()
-notGood = void $ die couldNotConnect
-  where couldNotConnect = "Could not connect. Settings correct? Kodi running? Network control enabled?"
+notGood = void $ die "Could not connect. Settings correct? Kodi running? Network control enabled?"
 
 justListenToNotifs :: IO ()
 justListenToNotifs = forever $ print =<< notification test
@@ -70,5 +73,5 @@ caster cast = method
           method = castMethod <$> file
 
 castFormat :: Castable -> Maybe Text
-castFormat (Youtube y)  = (fmap asYTPluginPath) . matchYouTubeId . T.pack $ y
+castFormat (Youtube y)  = fmap asYTPluginPath . matchYouTubeId . T.pack $ y
 castFormat (CastFile f) = Just . T.pack $ f

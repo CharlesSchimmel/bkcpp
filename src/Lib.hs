@@ -112,7 +112,6 @@ getTimes ki = do
     where getProps p = eitherToMaybe <$> kall ki (Player.getProperties p [Player.Time, Player.Totaltime])
 
 type PlayerId = Int
-
 getPlayer' ::
   Monad m =>
   Kaller m ->
@@ -121,10 +120,9 @@ getPlayer' ::
   m (Maybe Player)
 getPlayer' kallr pid itemGetr = runMaybeT $ do
   props <- MaybeT $ getPProps pid
-  let pProps x   = parseMaybe x props
-      times      = pProps parseJSON                           :: Maybe TimeProgress
-      speed      = pProps $ withObject "Speed" (.:"speed")    :: Maybe Float
-      mediatype  = pProps $ withObject "MediaType" (.:"type") :: Maybe String
+  let parseProps x   = parseMaybe x props
+      times      = parseProps parseJSON                           :: Maybe TimeProgress
+      speed      = parseProps $ withObject "Speed" (.:"speed")    :: Maybe Float
   media <- MaybeT $ itemGetr kallr pid
   MaybeT . pure $ Player <$> speed <*> Just pid <*> (_elapsed <$> times) <*> (_total <$> times) <*> Just media
     where getPProps pid = eitherToMaybe <$> kallr (Player.getProperties pid props)
@@ -139,7 +137,6 @@ getPlayer ki = runMaybeT $ do
   let pProps x   = parseMaybe x props
       times      = pProps parseJSON                           :: Maybe TimeProgress
       speed      = pProps $ withObject "Speed" (.:"speed")    :: Maybe Float
-      mediatype  = pProps $ withObject "MediaType" (.:"type") :: Maybe String
   media <- MaybeT $ getItem ki pid
   MaybeT . pure $ Player <$> speed <*> Just pid <*> (_elapsed <$> times) <*> (_total <$> times) <*> Just media
     where getPProps pid = eitherToMaybe <$> kall ki (Player.getProperties pid props)
@@ -151,25 +148,17 @@ updatePlayerProps ki = do
   return $ ki & player .~ plyr
 
 getItem :: KodiInstance -> Int -> IO (Maybe Media)
-getItem ki pid = runMaybeT $ do
-  item      <- MaybeT $ eitherToMaybe <$> kall ki (Player.getItem pid fields)
-  let md = parseMaybe parseJSON item :: Maybe MediaDetails
-  MaybeT . pure $ parseMaybe parseItem' item
-    where parseItem = withObject "Item" $ \o -> do
-                i <- o.:"item"
-                Media <$> (i.:"title") <*> (i.:"file") <*> pure 0
-          parseItem' x = parseJSON x <**> parseItem x
-          fields = [All.Album, All.Title, All.File, All.Duration, All.Albumartist, All.Artist, All.Displayartist, All.Episode, All.Showtitle, All.Season]
+getItem ki pid = getItem' (kall ki) pid
 
 getItem' :: Monad m => Kaller m -> PlayerId -> m (Maybe Media)
 getItem' kallr pid = runMaybeT $ do
   item      <- MaybeT $ eitherToMaybe <$> kallr (Player.getItem pid fields)
   let md = parseMaybe parseJSON item :: Maybe MediaDetails
-  MaybeT . pure $ parseMaybe parseItem' item
-    where parseItem = withObject "Item" $ \o -> do
+  MaybeT . pure $ parseMaybe parseMediaAndDetails item
+    where parseMedia = withObject "Item" $ \o -> do
                 i <- o.:"item"
                 Media <$> (i.:"title") <*> (i.:"file") <*> pure 0
-          parseItem' x = parseJSON x <**> parseItem x
+          parseMediaAndDetails x = parseJSON x <**> parseMedia x
           fields = [ All.Album
                    , All.Title
                    , All.File
@@ -210,10 +199,6 @@ subTitle (Episode episode series season) = intercalate " - " [seasonXEpisode, se
         seasonXEpisode = intercalate "x" $ P.map show [season, episode]
 subTitle (Audio album _ albumArtist _) = intercalate " - " parts
   where parts = catMaybes [headMay albumArtist, pure album]
-
-
-safeHead [] = Nothing
-safeHead (x:_) = Just x
 
 playerTitle :: Maybe Player -> String
 playerTitle = maybe "Nothing Playing" (mediaTitle . _media)
