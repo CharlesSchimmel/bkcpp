@@ -35,10 +35,13 @@ resolver: lts-11.14
 #  - wai
 packages:
 - .
+
 # Dependency packages to be pulled from upstream that are not in the resolver
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
-extra-deps: [../kodi-rpc]
+extra-deps:
+  - git: https://github.com/CharlesSchimmel/kodi-rpc
+    commit: ab6e5b5eaef8d04048b3944ec870644f3e342784
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
